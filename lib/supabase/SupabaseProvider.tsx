@@ -1,4 +1,4 @@
-"use client"
+"use client";
 
 import { createContext, useContext, useEffect, useState } from "react";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
@@ -39,7 +39,8 @@ export default function SupabaseProvider({
 
   return (
     <Context.Provider value={{ supabase, isLoaded }}>
-      {!isLoaded ? <div>Loading...</div> : children}
+      {/* {!isLoaded ? <div>Loading...</div> : children} */}
+      {children}
     </Context.Provider>
   );
 }
@@ -48,7 +49,7 @@ export const useSupabase = () => {
   const context = useContext(Context);
 
   if (context === undefined) {
-    throw new Error("usesupabase must be inside the provider");
+    throw new Error("useSupabase must be used inside the provider");
   }
 
   return context;
