@@ -95,7 +95,27 @@ export function useBoard(boardId: string) {
       setLoading(false);
     }
   }
-  return {
-    board,columns,loading,error
+
+  async function updateBoard(boardId: string, updates: Partial<Board>) {
+    try {
+      const updatedBoard = await boardService.updateBoard(
+        supabase!,
+        boardId,
+        updates
+      );
+      setBoard(updatedBoard);
+      return updateBoard;
+    } catch (error) {
+      setError(
+        error instanceof Error ? error.message : "Failed to update the board."
+      );
+    }
   }
+  return {
+    board,
+    columns,
+    loading,
+    error,
+    updateBoard,
+  };
 }
