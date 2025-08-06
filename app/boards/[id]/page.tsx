@@ -57,7 +57,7 @@ function DroppableColumn({
     <div
       ref={setNodeRef}
       className={`w-full lg:flex-shrink-0 lg:w-80 ${
-        isOver ? "bg-blue-500 rounded-lg" : ""
+        isOver ? "bg-blue-50 rounded-lg" : ""
       }`}
     >
       <div
