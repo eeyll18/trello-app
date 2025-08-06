@@ -16,13 +16,31 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useBoard } from "@/lib/hooks/useBoards";
-import { ColumnWithTasks, Task as TaskType} from "@/lib/supabase/models";
+import { ColumnWithTasks, Task } from "@/lib/supabase/models";
 import { DialogTitle, DialogTrigger } from "@radix-ui/react-dialog";
 import { Calendar, MoreHorizontal, Plus, User } from "lucide-react";
 import { useParams } from "next/navigation";
 import React, { FormEvent, useState } from "react";
+import {
+  DndContext,
+  DragEndEvent,
+  DragOverEvent,
+  DragOverlay,
+  DragStartEvent,
+  PointerSensor,
+  rectIntersection,
+  useDroppable,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
-function Column({
+function DroppableColumn({
   column,
   children,
   onCreateTask,
@@ -33,9 +51,20 @@ function Column({
   onCreateTask: (taskData: any) => Promise<void>;
   onEditColumn: (column: ColumnWithTasks) => void;
 }) {
+  const { setNodeRef, isOver } = useDroppable({ id: column.id });
+
   return (
-    <div className="w-full lg:flex-shrink-0 lg:w-80">
-      <div className="bg-white rounded-lg shadow-sm border ">
+    <div
+      ref={setNodeRef}
+      className={`w-full lg:flex-shrink-0 lg:w-80 ${
+        isOver ? "bg-blue-500 rounded-lg" : ""
+      }`}
+    >
+      <div
+        className={`bg-white rounded-lg shadow-sm border ${
+          isOver ? "ring-2 ring-blue-300" : ""
+        } `}
+      >
         <div className="p-3 sm:p-4 border-b">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2 min-w-0">
@@ -56,7 +85,10 @@ function Column({
           {children}
           <Dialog>
             <DialogTrigger asChild>
-              <Button variant={"ghost"} className=" w-full mt-3 text-gray-500 hover:text-gray-700">
+              <Button
+                variant={"ghost"}
+                className=" w-full mt-3 text-gray-500 hover:text-gray-700"
+              >
                 <Plus />
                 Add Task
               </Button>
@@ -127,7 +159,22 @@ function Column({
   );
 }
 
-function Task({ task }: { task: TaskType }) {
+function SortabbleTask({ task }: { task: Task }) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: task.id });
+
+  const styles = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
   function getPriorityColor(priority: "low" | "medium" | "high"): string {
     switch (priority) {
       case "high":
@@ -142,9 +189,9 @@ function Task({ task }: { task: TaskType }) {
   }
 
   return (
-    <div className="cursor-pointer hover:shadow-md transition-shadow">
-      <Card className="p-3 sm:p-4">
-        <CardContent>
+    <div ref={setNodeRef} style={styles} {...listeners} {...attributes}>
+      <Card className="cursor-pointer hover:shadow-md transition-shadow">
+        <CardContent className="p-3 sm:p-4">
           <div className="space-y-2 sm:space-y-3">
             <div className="flex items-start justify-between">
               <h4 className="font-medium text-gray-900 text-sm leading-tight flex-1 min-w-0 pr-2">
@@ -184,14 +231,80 @@ function Task({ task }: { task: TaskType }) {
   );
 }
 
+function TaskOverlay({ task }: { task: Task }) {
+  function getPriorityColor(priority: "low" | "medium" | "high"): string {
+    switch (priority) {
+      case "high":
+        return "bg-red-500";
+      case "medium":
+        return "bg-yellow-500";
+      case "low":
+        return "bg-green-500";
+      default:
+        return "bg-orange-500";
+    }
+  }
+
+  return (
+    <Card className="cursor-pointer hover:shadow-md transition-shadow">
+      <CardContent className="p-3 sm:p-4">
+        <div className="space-y-2 sm:space-y-3">
+          <div className="flex items-start justify-between">
+            <h4 className="font-medium text-gray-900 text-sm leading-tight flex-1 min-w-0 pr-2">
+              {task.title}
+            </h4>
+          </div>
+
+          <p className="text-xs text-gray-600 line-clamp-2">
+            {task.description || "No description."}
+          </p>
+
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-1 sm:space-x-2 min-w-0">
+              {task.assignee && (
+                <div className="flex items-center space-x-1 text-xs text-gray-500">
+                  <User className="h-3 w-3 " />
+                  <span className="truncate">{task.assignee}</span>
+                </div>
+              )}
+              {task.assignee && (
+                <div className="flex items-center space-x-1 text-xs text-gray-500">
+                  <Calendar className="h-3 w-3 " />
+                  <span className="truncate">{task.due_date}</span>
+                </div>
+              )}
+            </div>
+            <div
+              className={`w-2 h-2 rounded-full flex-shrink-0 ${getPriorityColor(
+                task.priority
+              )}`}
+            />
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function BoardPage() {
   const { id } = useParams<{ id: string }>();
-  const { board, updateBoard, columns, createRealTask } = useBoard(id);
+  const { board, updateBoard, columns, createRealTask, setColumns, moveTask } =
+    useBoard(id);
 
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [newColor, setNewColor] = useState("");
   const [isFilterOpen, setIsFilterOpen] = useState(false);
+
+  const [activeTask, setActiveTask] = useState<Task | null>(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    })
+  );
 
   async function handleUpdateForm(e: React.FormEvent) {
     e.preventDefault();
@@ -242,6 +355,103 @@ export default function BoardPage() {
         '[data-state="open"]'
       ) as HTMLElement;
       if (trigger) trigger.click();
+    }
+  }
+
+  function handleDragStart(event: DragStartEvent) {
+    // item that we dragging
+    const taskId = event.active.id as string;
+    const task = columns
+      .flatMap((col) => col.tasks)
+      .find((task) => task.id === taskId);
+    if (task) {
+      setActiveTask(task);
+    }
+  }
+
+  function handleDragOver(event: DragOverEvent) {
+    const { active, over } = event;
+    if (!over) return;
+
+    const activeId = active.id as string;
+    const overId = over.id as string;
+
+    const sourceColumn = columns.find((col) =>
+      col.tasks.some((task) => task.id === activeId)
+    );
+
+    const targetColumn = columns.find((col) =>
+      col.tasks.some((task) => task.id === overId)
+    );
+
+    if (!sourceColumn || !targetColumn) return;
+
+    if (sourceColumn.id === targetColumn.id) {
+      const activeIndex = sourceColumn.tasks.findIndex(
+        (task) => task.id === activeId
+      );
+
+      const overIndex = targetColumn.tasks.findIndex(
+        (task) => task.id === overId
+      );
+
+      if (activeIndex !== overIndex) {
+        setColumns((prev: ColumnWithTasks[]) => {
+          const newColumns = [...prev];
+          const column = newColumns.find((col) => col.id === sourceColumn.id);
+          if (column) {
+            const tasks = [...column.tasks];
+            const [removed] = tasks.splice(activeIndex, 1);
+            tasks.splice(overIndex, 0, removed);
+            column.tasks = tasks;
+          }
+          return newColumns;
+        });
+      }
+    }
+  }
+
+  async function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over) return;
+
+    const taskId = active.id as string;
+    const overId = over.id as string;
+
+    const targetColumn = columns.find((col) => col.id === overId);
+
+    if (targetColumn) {
+      const sourceColumn = columns.find((col) =>
+        col.tasks.some((task) => task.id === taskId)
+      );
+
+      if (sourceColumn && sourceColumn.id !== targetColumn.id) {
+        await moveTask(taskId, targetColumn.id, targetColumn.tasks.length);
+      }
+    } else {
+      // check if we're dropping another task
+      const sourceColumn = columns.find((col) =>
+        col.tasks.some((task) => task.id === taskId)
+      );
+
+      const targetColumn = columns.find((col) =>
+        col.tasks.some((task) => task.id === overId)
+      );
+
+      if (sourceColumn && targetColumn) {
+        const oldIndex = sourceColumn.tasks.findIndex(
+          (task) => task.id === taskId
+        );
+
+        const newIndex = targetColumn.tasks.findIndex(
+          (task) => task.id === overId
+        );
+
+        // switch positions - drag inside the column
+        if (oldIndex !== newIndex) {
+          await moveTask(taskId, targetColumn.id, newIndex);
+        }
+      }
     }
   }
 
@@ -445,27 +655,45 @@ export default function BoardPage() {
         </div>
 
         {/* board columns */}
-        <div
-          className="flex flex-col lg:flex-row lg:space-x-6 lg:overflow-x-auto  lg:pb-6 lg:px-2 lg:-mx-2 lg:[&::-webkit-scrollbar]:h-2 
+
+        <DndContext
+          sensors={sensors}
+          collisionDetection={rectIntersection}
+          onDragStart={handleDragStart}
+          onDragOver={handleDragOver}
+          onDragEnd={handleDragEnd}
+        >
+          <div
+            className="flex flex-col lg:flex-row lg:space-x-6 lg:overflow-x-auto  lg:pb-6 lg:px-2 lg:-mx-2 lg:[&::-webkit-scrollbar]:h-2 
             lg:[&::-webkit-scrollbar-track]:bg-gray-100 
             lg:[&::-webkit-scrollbar-thumb]:bg-gray-300 lg:[&::-webkit-scrollbar-thumb]:rounded-full 
             space-y-4 lg:space-y-0"
-        >
-          {columns.map((column, key) => (
-            <Column
-              key={key}
-              column={column}
-              onCreateTask={handleCreateTask}
-              onEditColumn={() => {}}
-            >
-              <div className="space-y-3 ">
-                {column.tasks.map((task, key) => (
-                  <Task task={task} key={key} />
-                ))}
-              </div>
-            </Column>
-          ))}
-        </div>
+          >
+            {columns.map((column, key) => (
+              <DroppableColumn
+                key={key}
+                column={column}
+                onCreateTask={handleCreateTask}
+                onEditColumn={() => {}}
+              >
+                <SortableContext
+                  items={column.tasks.map((task) => task.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <div className="space-y-3 ">
+                    {column.tasks.map((task, key) => (
+                      <SortabbleTask task={task} key={key} />
+                    ))}
+                  </div>
+                </SortableContext>
+              </DroppableColumn>
+            ))}
+
+            <DragOverlay>
+              {activeTask ? <TaskOverlay task={activeTask} /> : null}
+            </DragOverlay>
+          </div>
+        </DndContext>
       </main>
     </div>
   );
