@@ -10,10 +10,19 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useBoards } from "@/lib/hooks/useBoards";
+import { Board } from "@/lib/supabase/models";
 import { useUser } from "@clerk/nextjs";
 import {
+  Check,
   Filter,
   Grid3X3Icon,
   List,
@@ -29,6 +38,54 @@ export default function DashboardPage() {
   const { user } = useUser();
   const { createBoard, boards, loading, error } = useBoards();
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+
+  const [isFilterOpen, setIsFilterOpen] = useState<boolean>(false);
+
+  const [filters, setFilters] = useState({
+    search: "",
+    dateRange: {
+      start: null as string | null,
+      end: null as string | null,
+    },
+    taskCount: {
+      min: null as number | null,
+      max: null as number | null,
+    },
+  });
+
+  const boardsWithTaskCount = boards.map((board: Board) => ({
+    ...board,
+    taskCount: 0, // calculate from actual data
+  }));
+
+  const filteredBoards = boardsWithTaskCount.filter((board: Board) => {
+    const matchesSearch = board.title
+      .toLowerCase()
+      .includes(filters.search.toLowerCase());
+
+    const matchesDateRange =
+      (!filters.dateRange.start ||
+        new Date(board.created_at) >= new Date(filters.dateRange.start)) &&
+      (!filters.dateRange.end ||
+        new Date(board.created_at) <= new Date(filters.dateRange.end));
+
+    return matchesSearch && matchesDateRange;
+  });
+
+  function clearFilters() {
+    setFilters({
+      search: "",
+      dateRange: {
+        start: null as string | null,
+        end: null as string | null,
+      },
+      taskCount: {
+        min: null as number | null,
+        max: null as number | null,
+      },
+    });
+    setIsFilterOpen(false);
+  }
 
   const handleCreateBoard = async () => {
     await createBoard({ title: "New Board" });
@@ -65,10 +122,6 @@ export default function DashboardPage() {
           <p className="text-gray-600">
             Here's what's happening with your boards today.
           </p>
-          <Button className="w-full sm:w-auto" onClick={handleCreateBoard}>
-            <Plus className="h-4 w-4 mr-2" />
-            Create Board
-          </Button>
         </div>
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
@@ -135,14 +188,14 @@ export default function DashboardPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs sm:text-sm font-medium text-gray-600">
-                    Total Boards
+                    Total Tasks
                   </p>
                   <p className="text-xl sm:text-2xl font-bold text-gray-900">
-                    {boards.length}
+                    -
                   </p>
                 </div>
-                <div className="h-10 w-10 sm:h-12 sm:w-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                  <Trello className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600" />
+                <div className="h-10 w-10 sm:h-12 sm:w-12 bg-orange-100 rounded-lg flex items-center justify-center">
+                  <Check color="orange" />
                 </div>
               </div>
             </CardContent>
@@ -176,7 +229,12 @@ export default function DashboardPage() {
                 </Button>
               </div>
 
-              <Button variant="outline" size="sm" className="p-5 ">
+              <Button
+                onClick={() => setIsFilterOpen(true)}
+                variant="outline"
+                size="sm"
+                className="p-5"
+              >
                 <Filter />
                 Filter
               </Button>
@@ -194,6 +252,12 @@ export default function DashboardPage() {
               id="search"
               placeholder="Search boards..."
               className="pl-10"
+              onChange={(e) =>
+                setFilters((prev) => ({
+                  ...prev,
+                  search: e.target.value,
+                }))
+              }
             />
           </div>
 
@@ -201,7 +265,7 @@ export default function DashboardPage() {
             <div>No boards yet.</div>
           ) : viewMode === "grid" ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
-              {boards.map((board, key) => (
+              {filteredBoards.map((board, key) => (
                 <Link href={`/boards/${board.id}`} key={key}>
                   <Card className="hover:shadow-lg transition-shadow cursor-pointer group">
                     <CardHeader className="pb-3">
@@ -292,6 +356,115 @@ export default function DashboardPage() {
           )}
         </div>
       </main>
+
+      {/* filter boards */}
+      <Dialog open={isFilterOpen} onOpenChange={setIsFilterOpen}>
+        <DialogContent className="w-[95vw] max-w-[425px] mx-auto">
+          <DialogHeader>
+            <DialogTitle>Filter Boards</DialogTitle>
+            <p className="text-sm text-gray-600">
+              Filter boards by title, date or task count.
+            </p>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Search</Label>
+              <Input
+                onChange={(e) =>
+                  setFilters((prev) => ({
+                    ...prev,
+                    search: e.target.value,
+                  }))
+                }
+                id="search"
+                placeholder="Search board titles..."
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Date Range</Label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div>
+                  <Label className="text-xs">Start Date</Label>
+                  <Input
+                    type="date"
+                    onChange={(e) =>
+                      setFilters((prev) => ({
+                        ...prev,
+                        dateRange: {
+                          ...prev.dateRange,
+                          start: e.target.value || null,
+                        },
+                      }))
+                    }
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">End Date</Label>
+                  <Input
+                    type="date"
+                    onChange={(e) =>
+                      setFilters((prev) => ({
+                        ...prev,
+                        dateRange: {
+                          ...prev.dateRange,
+                          end: e.target.value || null,
+                        },
+                      }))
+                    }
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Task Count</Label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div>
+                  <Label className="text-xs">Minimum</Label>
+                  <Input
+                    onChange={(e) =>
+                      setFilters((prev) => ({
+                        ...prev,
+                        taskCount: {
+                          ...prev.taskCount,
+                          min: e.target.value ? Number(e.target.value) : null,
+                        },
+                      }))
+                    }
+                    type="number"
+                    min="0"
+                    placeholder="Min tasks"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Maximum</Label>
+                  <Input
+                    onChange={(e) =>
+                      setFilters((prev) => ({
+                        ...prev,
+                        taskCount: {
+                          ...prev.taskCount,
+                          max: e.target.value ? Number(e.target.value) : null,
+                        },
+                      }))
+                    }
+                    type="number"
+                    min="0"
+                    placeholder="Max tasks"
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="flex flex-col sm:flex-row pt-4 space-y-2 sm:space-y-0 sm:space-x-2 justify-between items-center">
+              <Button variant={"outline"} onClick={clearFilters}>
+                Clear Filters
+              </Button>
+              <Button onClick={() => setIsFilterOpen(false)}>
+                Apply Filters
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
