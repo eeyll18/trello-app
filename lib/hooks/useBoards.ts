@@ -200,12 +200,30 @@ export function useBoard(boardId: string) {
       });
 
       setColumns((prev) => [...prev, { ...newColumn, tasks: [] }]);
-      return newColumn
+      return newColumn;
     } catch (error) {
       error instanceof Error ? error.message : "Failed to create column.";
     }
   }
 
+  async function updateColumn(columnId: string, title: string) {
+    try {
+      const updatedColumn = await columnService.updateColumnTitle(
+        supabase!,
+        columnId,
+        title
+      );
+      setColumns((prev) =>
+        prev.map((col) =>
+          col.id === columnId ? { ...col, ...updatedColumn } : col
+        )
+      );
+
+      return updatedColumn;
+    } catch (error) {
+      error instanceof Error ? error.message : "Failed to create column.";
+    }
+  }
   return {
     board,
     columns,
@@ -216,5 +234,6 @@ export function useBoard(boardId: string) {
     createRealTask,
     moveTask,
     createColumn,
+    updateColumn
   };
 }

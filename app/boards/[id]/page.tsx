@@ -75,7 +75,12 @@ function DroppableColumn({
                 {column.tasks.length}
               </Badge>
             </div>
-            <Button variant={"ghost"} size={"sm"} className="flex-shrink-0">
+            <Button
+              variant={"ghost"}
+              size={"sm"}
+              className="flex-shrink-0"
+              onClick={() => onEditColumn(column)}
+            >
               <MoreHorizontal />
             </Button>
           </div>
@@ -296,6 +301,7 @@ export default function BoardPage() {
     setColumns,
     moveTask,
     createColumn,
+    updateColumn,
   } = useBoard(id);
 
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -306,6 +312,11 @@ export default function BoardPage() {
   const [isCreatingColumn, setIsCreatingColumn] = useState(false);
   const [isEditingColumn, setIsEditingColumn] = useState(false);
   const [newColumnTitle, setNewColumnTitle] = useState("");
+
+  const [editingColumnTitle, setEditingColumnTitle] = useState("");
+  const [editingColumn, setEditingColumn] = useState<ColumnWithTasks | null>(
+    null
+  ); // track column we are editing
 
   const [activeTask, setActiveTask] = useState<Task | null>(null);
 
@@ -475,6 +486,24 @@ export default function BoardPage() {
 
     setNewColumnTitle("");
     setIsCreatingColumn(false);
+  }
+
+  async function handleUpdateColumn(e: React.FormEvent) {
+    e.preventDefault();
+
+    if (!editingColumn || !editingColumnTitle.trim()) return;
+
+    await updateColumn(editingColumn.id, editingColumnTitle.trim());
+
+    setEditingColumnTitle("");
+    setIsEditingColumn(false);
+    setEditingColumn(null);
+  }
+
+  function handleEditColumn(column: ColumnWithTasks) {
+    setIsEditingColumn(true);
+    setEditingColumn(column);
+    setEditingColumnTitle(column.title);
   }
 
   return (
@@ -700,7 +729,7 @@ export default function BoardPage() {
                   key={key}
                   column={column}
                   onCreateTask={handleCreateTask}
-                  onEditColumn={() => {}}
+                  onEditColumn={handleEditColumn}
                 >
                   <SortableContext
                     items={column.tasks.map((task) => task.id)}
@@ -763,6 +792,43 @@ export default function BoardPage() {
                 Cancel
               </Button>
               <Button type="submit">Create Column</Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isEditingColumn} onOpenChange={setIsEditingColumn}>
+        <DialogContent className="w-[95vw] max-w-[425px] mx-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Column</DialogTitle>
+            <p className="text-sm text-gray-600">
+              Update the title of your column
+            </p>
+          </DialogHeader>
+          <form className="space-y-4 " onSubmit={handleUpdateColumn}>
+            <div className="space-y-2">
+              <Label>Column Title</Label>
+              <Input
+                id="columnTitle"
+                value={editingColumnTitle}
+                onChange={(e) => setEditingColumnTitle(e.target.value)}
+                placeholder="Enter column title..."
+                required
+              />
+            </div>
+            <div className="space-x-2 flex justify-end">
+              <Button
+                variant={"outline"}
+                type="button"
+                onClick={() => {
+                  setIsEditingColumn(false);
+                  setEditingColumnTitle("");
+                  setEditingColumn(null);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button type="submit">Edit Column</Button>
             </div>
           </form>
         </DialogContent>
