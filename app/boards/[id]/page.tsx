@@ -637,7 +637,7 @@ export default function BoardPage() {
             <DialogHeader>
               <DialogTitle>Filter Tasks</DialogTitle>
               <p className="text-sm text-gray-600">
-                Filter tasks by priority, assignee or due date.
+                Filter tasks by priority or due date.
               </p>
             </DialogHeader>
             <div className="space-y-4 ">
